@@ -183,8 +183,16 @@ tab1, tab2 = st.tabs(["💬 Hỏi đáp", "📝 Trắc nghiệm"])
 with tab1:
     st.header("💬 Chat & Nhận diện hình ảnh")
     
-    # 1. Khu vực nhập liệu (Giữ nguyên)
-    uploaded_file = st.file_uploader("🖼️ Đính kèm ảnh (biển báo, tình huống...)", type=["jpg", "jpeg", "png"])
+    # --- LOGIC XÓA ẢNH SAU KHI HỎI ---
+    if "uploader_key" not in st.session_state:
+        st.session_state.uploader_key = 0
+
+    # Dùng key động để có thể reset uploader
+    uploaded_file = st.file_uploader(
+        "🖼️ Đính kèm ảnh (biển báo, tình huống...)", 
+        type=["jpg", "jpeg", "png"],
+        key=f"uploader_{st.session_state.uploader_key}"
+    )
     
     if uploaded_file is not None:
         st.image(uploaded_file, caption="Ảnh đang chọn", width=250)
@@ -198,8 +206,6 @@ with tab1:
         if "messages" not in st.session_state:
             st.session_state.messages = []
             
-        st.session_state.messages.append({"role": "user", "content": user_input})
-
         with st.spinner("Đang phân tích..."):
             current_image = None
             if uploaded_file is not None:
@@ -232,18 +238,30 @@ with tab1:
                 )
                 answer = call_gemini_smart(rag_prompt)
 
-        # Lưu vào lịch sử (Giữ nguyên cấu trúc cũ)
+        # LƯU VÀO LỊCH SỬ CHAT: Lưu cả câu hỏi và ảnh vào cùng một tin nhắn của User
+        st.session_state.messages.append({
+            "role": "user", 
+            "content": user_input, 
+            "image": current_image # Lưu ảnh vào đây để tí nữa hiển thị lại
+        })
+
+        # Lưu tin nhắn của Assistant
         st.session_state.messages.append({
             "role": "assistant", 
-            "content": answer,
-            "image": current_image 
+            "content": answer
         })
+
+        # --- CHIÊU CUỐI: TỰ XÓA ẢNH Ở Ô NHẬP LIỆU ---
+        if uploaded_file is not None:
+            st.session_state.uploader_key += 1 # Tăng key để reset widget uploader
+        
         st.rerun()
 
-    # 3. Hiển thị tin nhắn (Giữ nguyên chức năng cũ)
+    # 3. Hiển thị tin nhắn
     if "messages" in st.session_state:
         for m in reversed(st.session_state.messages):
             with st.chat_message(m["role"]):
+                # Nếu tin nhắn có ảnh (User gửi), hiện ảnh lên trước
                 if "image" in m and m["image"] is not None:
                     st.image(m["image"], width=250)
                 st.markdown(m["content"])
